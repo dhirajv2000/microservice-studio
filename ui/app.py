@@ -140,15 +140,12 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 # Session state
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Persistent run state
 if "result"        not in st.session_state: st.session_state.result        = None
 if "thread_id"     not in st.session_state: st.session_state.thread_id     = None
 if "status"        not in st.session_state: st.session_state.status        = None
 
-# Pending stream input. Either a dict (initial run) or a Command (HITL resume).
-# Set by button handlers, consumed by the top-level streaming block.
 if "pending_input" not in st.session_state: st.session_state.pending_input = None
-if "pending_kind"  not in st.session_state: st.session_state.pending_kind  = None  # "new" | "resume"
+if "pending_kind"  not in st.session_state: st.session_state.pending_kind  = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -192,9 +189,8 @@ def completed_agents_from_logs(logs):
 
 
 def render_timeline(current, status, completed):
-    """Completed wins over active so green chips stay green at the end."""
     chips = []
-    terminal = status in ("success", "rejected", "needs_human", "failed")
+    terminal = status in ("success", "rejected", "needs_human", "failed", "accepted_partial")
     for key, label in AGENT_PIPELINE:
         if key in completed:
             cls, icon = "chip-done", "✓"
@@ -292,8 +288,7 @@ if generate and requirements.strip():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Top-level streaming handler — runs whenever pending_input is set.
-# This is the ONLY place graph.stream() is called.
+# Top-level streaming handler
 # ─────────────────────────────────────────────────────────────────────────────
 
 if st.session_state.pending_input is not None and st.session_state.thread_id:
@@ -301,7 +296,6 @@ if st.session_state.pending_input is not None and st.session_state.thread_id:
     kind         = st.session_state.pending_kind
     config       = {"configurable": {"thread_id": st.session_state.thread_id}}
 
-    # Clear the staged input now so it doesn't re-fire on the next rerun
     st.session_state.pending_input = None
     st.session_state.pending_kind  = None
 
@@ -317,7 +311,6 @@ if st.session_state.pending_input is not None and st.session_state.thread_id:
     timeline_box = st.empty()
     log_box      = st.empty()
 
-    # Seed the timeline so it's visible immediately
     timeline_box.markdown(
         render_timeline("validator", "running", set()),
         unsafe_allow_html=True,
@@ -349,15 +342,13 @@ if st.session_state.pending_input is not None and st.session_state.thread_id:
             )
             log_box.markdown(render_log(logs), unsafe_allow_html=True)
 
-    # Pull the FULL merged state from the checkpointer.
     snapshot = graph.get_state(config)
     final    = snapshot.values
-    if snapshot.next:                       # graph paused at an interrupt()
+    if snapshot.next:
         new_status = "needs_human"
     else:
         new_status = final.get("status") or "failed"
 
-    # Final timeline pass so all completed chips stay green
     timeline_box.markdown(
         render_timeline("", new_status, completed_agents_from_logs(final.get("agent_logs", logs))),
         unsafe_allow_html=True,
@@ -423,14 +414,16 @@ elif status == "needs_human" and result:
     else:
         which = "Verification incomplete"
 
+    attempt = result.get("human_review_count", 0)
+    attempt_suffix = f" (review attempt {attempt + 1})" if attempt > 0 else ""
+
     st.markdown(
-        f'<div class="banner banner-warn">⚠️ {which} after the retry budget was exhausted. Choose how to proceed.</div>',
+        f'<div class="banner banner-warn">⚠️ {which} after the retry budget was exhausted.{attempt_suffix} Choose how to proceed.</div>',
         unsafe_allow_html=True,
     )
 
     show_timeline_panel("", status, result.get("agent_logs", []))
 
-    # ── Action panel FIRST ───────────────────────────────────────────────────
     st.markdown(
         '<div class="panel-title" style="margin-top:1.2rem;">Your call</div>',
         unsafe_allow_html=True,
@@ -440,13 +433,12 @@ elif status == "needs_human" and result:
         height=90,
         label_visibility="collapsed",
         placeholder="Optionally clarify or simplify your requirements, then click Retry...",
-        key="hitl_clarify",
+        key=f"hitl_clarify_{attempt}",
     )
     c1, c2 = st.columns(2)
-    retry_clicked  = c1.button("🔄 Retry with clarification", use_container_width=True, key="hitl_retry")
-    accept_clicked = c2.button("✅ Accept what we have",       use_container_width=True, key="hitl_accept")
+    retry_clicked  = c1.button("🔄 Retry with clarification", use_container_width=True, key=f"hitl_retry_{attempt}")
+    accept_clicked = c2.button("✅ Accept what we have",       use_container_width=True, key=f"hitl_accept_{attempt}")
 
-    # ── Then details, only what actually failed ─────────────────────────────
     st.markdown(
         '<div class="panel-title" style="margin-top:1.2rem;">What failed</div>',
         unsafe_allow_html=True,
@@ -465,7 +457,6 @@ elif status == "needs_human" and result:
         st.markdown("**Last generated main.py**")
         st.code(result.get("main_py", "") or "(empty)", language="python")
 
-    # ── Stage button clicks for the top-level handler ───────────────────────
     if retry_clicked:
         clarified = new_req.strip() or result.get("user_requirements", "")
         st.session_state.status        = "running"
@@ -480,6 +471,44 @@ elif status == "needs_human" and result:
         st.session_state.pending_input = Command(resume={"action": "accept"})
         st.session_state.pending_kind  = "resume"
         st.rerun()
+
+# ── Accepted partial output ─────────────────────────────────────────────────
+elif status == "accepted_partial" and result:
+    st.markdown(
+        '<div class="banner banner-warn">⚠️ Accepted partial output. The code did not pass all verifiers — review before using.</div>',
+        unsafe_allow_html=True,
+    )
+
+    show_timeline_panel("", status, result.get("agent_logs", []))
+
+    if result.get("main_py") and result.get("models_py"):
+        # Dockerfile may be missing on the partial path; synthesize a minimal one so create_zip works
+        if not result.get("dockerfile"):
+            result["dockerfile"] = ""
+        if not result.get("test_cases"):
+            result["test_cases"] = "# tests were not finalized"
+        zip_buf = create_zip(result)
+        st.download_button(
+            label="📦 Download partial project zip",
+            data=zip_buf,
+            file_name="generated_api_partial.zip",
+            mime="application/zip",
+        )
+
+    tabs = st.tabs(["main.py", "models.py", "tests", "What failed"])
+    with tabs[0]: st.code(result.get("main_py", "") or "(empty)", language="python")
+    with tabs[1]: st.code(result.get("models_py", "") or "(empty)", language="python")
+    with tabs[2]: st.code(result.get("test_cases", "") or "# no tests stored", language="python")
+    with tabs[3]:
+        if security_failed(result):
+            st.markdown("**Security findings:**")
+            st.code(result.get("security_feedback") or "(no detail)", language="text")
+        if qa_failed(result):
+            st.markdown("**QA output:**")
+            st.code(result.get("qa_output") or "(no detail)", language="text")
+
+    with st.expander("Show agent log"):
+        st.markdown(render_log(result.get("agent_logs", [])), unsafe_allow_html=True)
 
 # ── Failed (architect or developer LLM error) ───────────────────────────────
 elif status == "failed":

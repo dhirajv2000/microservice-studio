@@ -70,3 +70,22 @@ def architect_agent(state: dict) -> dict:
         "agent_logs": [log, summary],
     }
 
+def render_plan_for_developer(plan_dict: dict) -> str:
+    plan = ArchitecturePlan(**plan_dict)
+
+    lines = ["## Models"]
+    for m in plan.models:
+        lines.append(f"\n### {m.name}  (table: {m.table_name})")
+        lines.append("- id: Integer, primary key  (added automatically)")
+        for f in m.fields:
+            nullable_str = "nullable" if f.nullable else "NOT NULL"
+            lines.append(f"- {f.name}: {f.type}  ({nullable_str})")
+
+    lines.append("\n## Endpoints")
+    for e in plan.endpoints:
+        lines.append(f"- {e.method} {e.path} — {e.description}")
+
+    if plan.notes:
+        lines.append(f"\n## Notes\n{plan.notes}")
+
+    return "\n".join(lines)

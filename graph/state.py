@@ -28,6 +28,7 @@ class AgentState(TypedDict):
     # Loop control
     retries:     int
     max_retries: int
+    human_review_count: int
 
     # State for logging and UI
     current_agent: str
@@ -58,6 +59,7 @@ def initial_state(user_requirements: str) -> AgentState:
 
         retries=0,
         max_retries=1,
+        human_review_count=0,
 
         current_agent="",
         agent_logs=[],

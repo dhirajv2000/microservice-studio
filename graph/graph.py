@@ -27,11 +27,13 @@ def human_review(state: AgentState) -> dict:
             ),
             "retries": 0,
             "status": "running",
+            "human_review_count": state.get("human_review_count", 0) + 1,
             "agent_logs": ["[Human] User clarified requirements and retried."],
         }
 
     return {
-        "status": "needs_human",
+        "status": "accepted_partial",
+        "human_review_count": state.get("human_review_count", 0) + 1,
         "agent_logs": ["[Human] User accepted partial output."],
     }
 

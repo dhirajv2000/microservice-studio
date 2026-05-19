@@ -20,7 +20,7 @@ def validator_node(state: dict) -> dict:
     raw = state.get("user_requirements", "")
 
     try:
-        sanitized_text, results_valid, results_score = scan_prompt(raw, SECURITY_SCANNERS)
+        sanitized_text, results_valid, results_score = scan_prompt(SECURITY_SCANNERS, raw)
 
         if not all(results_valid.values()):
             raise ValueError(f"Security threat detected (scores: {results_score})")
