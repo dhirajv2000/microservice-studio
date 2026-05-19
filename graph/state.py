@@ -17,10 +17,19 @@ class AgentState(TypedDict):
     security_approved: bool
     security_feedback: Optional[str]
 
+    # QA verdict
+    qa_results: str            # "pass" | "fail" | "pending"
+    qa_output:  Optional[str]
+    test_cases: Optional[str]
+
     # Dockerfile produced by the dockerize node
     dockerfile: Optional[str]
 
-    # State for logging and UI 
+    # Loop control
+    retries:     int
+    max_retries: int
+
+    # State for logging and UI
     current_agent: str
     agent_logs:    Annotated[List[str], operator.add]
 
@@ -41,7 +50,14 @@ def initial_state(user_requirements: str) -> AgentState:
         security_approved=False,
         security_feedback=None,
 
+        qa_results="pending",
+        qa_output=None,
+        test_cases=None,
+
         dockerfile=None,
+
+        retries=0,
+        max_retries=1,
 
         current_agent="",
         agent_logs=[],
