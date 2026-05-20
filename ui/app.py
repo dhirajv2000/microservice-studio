@@ -9,6 +9,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import uuid
+import html as html_lib
 import streamlit as st
 from langgraph.types import Command
 
@@ -22,230 +23,320 @@ from utils.zipper import create_zip
 # ─────────────────────────────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="Microservice Studio — FastAPI Generator",
-    page_icon="🛠️",
+    page_title="Microservice Studio",
+    page_icon="◆",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
 CUSTOM_CSS = """
 <style>
-  .stApp {
-    background: #0b1020;
-    color: #e2e8f0;
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    --bg-deep:    #0a0e1f;
+    --bg-panel:   #131830;
+    --bg-input:   #0f1428;
+    --bg-code:    #080b1c;
+
+    --border-soft: rgba(148, 163, 200, 0.10);
+    --border-mid:  rgba(148, 163, 200, 0.18);
+
+    --text-hi:    #f5f7fb;
+    --text-mid:   #c8d1e6;
+    --text-low:   #8893b0;
+    --text-dim:   #5b6480;
+
+    --amber:      #f5b342;
+    --amber-soft: #f5b34222;
+    --coral:      #f47474;
+    --coral-soft: #f4747422;
+    --emerald:    #4ade80;
+    --emerald-soft: #4ade8022;
+    --indigo:     #818cf8;
+    --indigo-soft: #818cf822;
+    --sky:        #60a5fa;
+    --sky-soft:   #60a5fa22;
   }
-  .block-container { padding-top: 2.4rem; max-width: 1100px; }
+
+  .stApp {
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, rgba(129, 140, 248, 0.07) 0%, transparent 60%),
+      var(--bg-deep);
+    color: var(--text-mid);
+    font-family: 'Inter', -apple-system, sans-serif;
+  }
+  .block-container { padding-top: 2.4rem; max-width: 1080px; }
   #MainMenu, footer, header { visibility: hidden; }
 
+  /* ── Header ──────────────────────────────────────────────────────────── */
+  .ms-header {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    margin: 0 0 0.4rem 0;
+  }
+  .ms-mark {
+    width: 36px; height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
   .ms-title {
-    font-size: 1.9rem;
-    font-weight: 600;
-    color: #f1f5f9;
-    letter-spacing: -0.015em;
-    margin: 0 0 0.25rem 0;
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 2.05rem;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    background: linear-gradient(135deg, #f5b342 0%, #f47474 55%, #818cf8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.1;
+    margin: 0;
   }
   .ms-subtitle {
-    color: #94a3b8;
-    font-size: 0.95rem;
-    margin-bottom: 2rem;
+    color: var(--text-low);
+    font-size: 0.96rem;
+    font-weight: 400;
+    margin: 0 0 2.2rem 0;
+    max-width: 640px;
+    line-height: 1.5;
   }
 
+  /* ── Section labels ──────────────────────────────────────────────────── */
   .section-label {
+    font-family: 'Inter Tight', sans-serif;
     font-size: 0.72rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: #64748b;
-    margin: 1.6rem 0 0.6rem 0;
+    letter-spacing: 0.14em;
+    color: var(--text-dim);
+    margin: 1.7rem 0 0.65rem 0;
   }
   .section-label:first-of-type { margin-top: 0.5rem; }
 
-  /* Pipeline chips */
-  .agent-row { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+  /* ── Pipeline chips ──────────────────────────────────────────────────── */
+  .agent-row {
+    display: flex;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    padding: 0.6rem 0;
+  }
   .chip {
-    padding: 0.32rem 0.78rem;
-    border-radius: 6px;
-    font-size: 0.78rem;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 0.38rem 0.78rem;
+    border-radius: 5px;
+    font-size: 0.76rem;
     font-weight: 500;
     border: 1px solid;
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    font-family: 'Inter', -apple-system, sans-serif;
+    gap: 0.45rem;
+    transition: all 0.2s ease;
   }
-  .chip-pending  { background: rgba(148, 163, 184, 0.05); border-color: rgba(148, 163, 184, 0.15); color: #64748b; }
-  .chip-active   { background: rgba(59, 130, 246, 0.12);  border-color: rgba(59, 130, 246, 0.5);  color: #93c5fd; }
-  .chip-done     { background: rgba(34, 197, 94, 0.10);   border-color: rgba(34, 197, 94, 0.4);   color: #86efac; }
-  .chip-failed   { background: rgba(239, 68, 68, 0.10);   border-color: rgba(239, 68, 68, 0.45);  color: #fca5a5; }
+  .chip-pending  {
+    background: rgba(148, 163, 200, 0.03);
+    border-color: var(--border-soft);
+    color: var(--text-dim);
+  }
+  .chip-active   {
+    background: var(--sky-soft);
+    border-color: rgba(96, 165, 250, 0.55);
+    color: var(--sky);
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.08);
+  }
+  .chip-done     {
+    background: var(--emerald-soft);
+    border-color: rgba(74, 222, 128, 0.45);
+    color: var(--emerald);
+  }
+  .chip-failed   {
+    background: var(--coral-soft);
+    border-color: rgba(244, 116, 116, 0.5);
+    color: var(--coral);
+  }
 
   .chip-active .dot {
     width: 0.5rem; height: 0.5rem; border-radius: 50%;
-    background: #60a5fa;
+    background: var(--sky);
+    box-shadow: 0 0 8px var(--sky);
     animation: pulse 1.3s ease-in-out infinite;
   }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50%     { opacity: 0.4; transform: scale(0.85); }
+  }
 
-  /* Terminal */
+  /* ── Terminal / activity log ─────────────────────────────────────────── */
   .terminal {
-    background: #060912;
-    border: 1px solid rgba(148, 163, 184, 0.1);
+    background: var(--bg-code);
+    border: 1px solid var(--border-soft);
     border-radius: 8px;
-    padding: 0.9rem 1.1rem;
-    font-family: ui-monospace, 'SF Mono', 'Menlo', monospace;
-    font-size: 0.8rem;
-    color: #cbd5e1;
+    padding: 1rem 1.15rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.81rem;
+    color: var(--text-mid);
     max-height: 340px;
     overflow-y: auto;
     white-space: pre-wrap;
-    line-height: 1.6;
+    line-height: 1.65;
   }
-  .terminal .line-ok    { color: #86efac; }
-  .terminal .line-fail  { color: #fca5a5; }
-  .terminal .line-info  { color: #93c5fd; }
-  .terminal .line-step  { color: #cbd5e1; }
-  .terminal .line-wait  { color: #fde047; font-style: italic; }
+  .terminal .line-ok    { color: var(--emerald); }
+  .terminal .line-fail  { color: var(--coral); }
+  .terminal .line-info  { color: var(--sky); }
+  .terminal .line-step  { color: var(--text-mid); }
+  .terminal .line-wait  { color: var(--amber); font-style: italic; }
+  .terminal .line-retry {
+    color: var(--amber);
+    font-weight: 600;
+    border-top: 1px dashed rgba(245, 179, 66, 0.4);
+    border-bottom: 1px dashed rgba(245, 179, 66, 0.4);
+    padding: 0.3rem 0;
+    margin: 0.35rem 0;
+    display: block;
+    letter-spacing: 0.05em;
+  }
 
-  /* Plan card */
+  /* ── Plan card ───────────────────────────────────────────────────────── */
   .plan-card {
-    background: rgba(30, 41, 59, 0.4);
-    border: 1px solid rgba(148, 163, 184, 0.12);
+    background: var(--bg-panel);
+    border: 1px solid var(--border-soft);
     border-radius: 8px;
-    padding: 1rem 1.2rem;
+    padding: 1.1rem 1.3rem;
+    height: 420px;
+    overflow-y: auto;
   }
   .plan-card h4 {
-    color: #f1f5f9;
-    margin: 0 0 0.15rem 0;
-    font-size: 0.95rem;
+    font-family: 'Inter Tight', sans-serif;
+    color: var(--text-hi);
+    margin: 0 0 0.2rem 0;
+    font-size: 1rem;
     font-weight: 600;
+    letter-spacing: -0.01em;
   }
-  .plan-sub { color: #64748b; font-size: 0.78rem; margin-bottom: 0.9rem; }
+  .plan-sub { color: var(--text-dim); font-size: 0.78rem; margin-bottom: 1rem; }
   .plan-section {
-    color: #64748b;
+    font-family: 'Inter Tight', sans-serif;
+    color: var(--text-dim);
     font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.12em;
     font-weight: 600;
-    margin: 0.7rem 0 0.35rem 0;
+    margin: 0.9rem 0 0.4rem 0;
   }
-  .plan-list { margin: 0; padding-left: 1.1rem; color: #cbd5e1; font-size: 0.85rem; line-height: 1.7; }
-  .plan-list li { margin-bottom: 0.1rem; }
+  .plan-list { margin: 0; padding-left: 1.15rem; color: var(--text-mid); font-size: 0.86rem; line-height: 1.75; }
+  .plan-list li { margin-bottom: 0.12rem; }
   .plan-list.no-bullets { list-style: none; padding-left: 0; }
-  .plan-meta { color: #64748b; font-size: 0.78rem; }
+  .plan-meta { color: var(--text-dim); font-size: 0.78rem; }
 
   .plan-method {
     display: inline-block;
-    min-width: 3.2rem;
-    padding: 0.05rem 0.45rem;
+    min-width: 3.3rem;
+    padding: 0.08rem 0.5rem;
     border-radius: 4px;
-    font-family: ui-monospace, 'SF Mono', monospace;
+    font-family: 'JetBrains Mono', monospace;
     font-size: 0.7rem;
     font-weight: 600;
     text-align: center;
-    margin-right: 0.5rem;
+    margin-right: 0.55rem;
   }
-  .method-GET    { background: rgba(59, 130, 246, 0.18); color: #93c5fd; }
-  .method-POST   { background: rgba(34, 197, 94, 0.18);  color: #86efac; }
-  .method-PUT    { background: rgba(234, 179, 8, 0.18);  color: #fde047; }
-  .method-DELETE { background: rgba(239, 68, 68, 0.18);  color: #fca5a5; }
+  .method-GET    { background: rgba(96, 165, 250, 0.2); color: var(--sky); }
+  .method-POST   { background: rgba(74, 222, 128, 0.2); color: var(--emerald); }
+  .method-PUT    { background: rgba(245, 179, 66, 0.2); color: var(--amber); }
+  .method-DELETE { background: rgba(244, 116, 116, 0.2); color: var(--coral); }
 
-  /* Security panel */
-  .sec-panel {
-    background: rgba(30, 41, 59, 0.4);
-    border: 1px solid rgba(148, 163, 184, 0.12);
-    border-radius: 8px;
-    padding: 1rem 1.2rem;
-  }
-  .sec-panel.ok   { border-color: rgba(34, 197, 94, 0.35); }
-  .sec-panel.bad  { border-color: rgba(239, 68, 68, 0.4); }
-  .sec-panel h4 { color: #f1f5f9; margin: 0 0 0.2rem 0; font-size: 0.95rem; font-weight: 600; }
-  .sec-status {
-    display: inline-block;
-    padding: 0.15rem 0.55rem;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    margin-left: 0.4rem;
-  }
-  .sec-status.ok  { background: rgba(34, 197, 94, 0.15);  color: #86efac; }
-  .sec-status.bad { background: rgba(239, 68, 68, 0.15);  color: #fca5a5; }
-  .sec-rules { color: #94a3b8; font-size: 0.8rem; margin-top: 0.5rem; line-height: 1.6; }
-  .sec-rule-chip {
-    display: inline-block;
-    padding: 0.1rem 0.45rem;
-    background: rgba(59, 130, 246, 0.12);
-    color: #93c5fd;
-    border-radius: 4px;
-    font-family: ui-monospace, monospace;
-    font-size: 0.72rem;
-    margin-right: 0.3rem;
-  }
-
-  /* Banners */
+  /* ── Banners ─────────────────────────────────────────────────────────── */
   .banner {
-    padding: 0.85rem 1.15rem;
+    padding: 0.9rem 1.2rem;
     border-radius: 8px;
     font-size: 0.92rem;
     font-weight: 500;
     margin-bottom: 1rem;
     border: 1px solid;
+    font-family: 'Inter', sans-serif;
   }
-  .banner-ok   { background: rgba(34, 197, 94, 0.07); border-color: rgba(34, 197, 94, 0.35); color: #86efac; }
-  .banner-fail { background: rgba(239, 68, 68, 0.07); border-color: rgba(239, 68, 68, 0.35); color: #fca5a5; }
-  .banner-warn { background: rgba(234, 179, 8, 0.07); border-color: rgba(234, 179, 8, 0.35); color: #fde047; }
+  .banner-ok   { background: var(--emerald-soft); border-color: rgba(74, 222, 128, 0.35); color: var(--emerald); }
+  .banner-fail { background: var(--coral-soft); border-color: rgba(244, 116, 116, 0.4); color: var(--coral); }
+  .banner-warn { background: var(--amber-soft); border-color: rgba(245, 179, 66, 0.4); color: var(--amber); }
 
-  /* Buttons */
+  /* ── Buttons ─────────────────────────────────────────────────────────── */
   .stButton > button {
-    background: #2563eb;
-    color: white;
+    background: linear-gradient(135deg, #f5b342 0%, #e89a2f 100%);
+    color: #1a1330;
     border: 0;
     border-radius: 6px;
-    font-weight: 500;
-    font-size: 0.9rem;
-    padding: 0.55rem 1.3rem;
-    transition: background 0.15s ease;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 0.92rem;
+    padding: 0.6rem 1.4rem;
+    transition: all 0.18s ease;
+    box-shadow: 0 4px 14px rgba(245, 179, 66, 0.25);
   }
-  .stButton > button:hover { background: #1d4ed8; }
-  .stButton > button:focus { box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.35); }
+  .stButton > button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(245, 179, 66, 0.35);
+    filter: brightness(1.05);
+  }
+  .stButton > button:focus { box-shadow: 0 0 0 3px rgba(245, 179, 66, 0.3); }
 
   .stDownloadButton > button {
-    background: rgba(34, 197, 94, 0.15);
-    color: #86efac;
-    border: 1px solid rgba(34, 197, 94, 0.4);
+    background: var(--emerald-soft);
+    color: var(--emerald);
+    border: 1px solid rgba(74, 222, 128, 0.45);
     border-radius: 6px;
-    font-weight: 500;
-    padding: 0.55rem 1.3rem;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    padding: 0.6rem 1.4rem;
+    box-shadow: none;
   }
-  .stDownloadButton > button:hover { background: rgba(34, 197, 94, 0.22); }
+  .stDownloadButton > button:hover {
+    background: rgba(74, 222, 128, 0.18);
+    transform: translateY(-1px);
+  }
 
-  /* Inputs */
+  /* ── Inputs ──────────────────────────────────────────────────────────── */
   .stTextArea textarea {
-    background: rgba(15, 23, 42, 0.6);
-    border: 1px solid rgba(148, 163, 184, 0.15);
-    color: #e2e8f0;
-    border-radius: 6px;
-    font-family: inherit;
-    font-size: 0.92rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border-mid);
+    color: var(--text-hi);
+    border-radius: 7px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.94rem;
+    line-height: 1.55;
   }
   .stTextArea textarea:focus {
-    border-color: rgba(59, 130, 246, 0.5);
-    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
+    border-color: rgba(245, 179, 66, 0.55);
+    box-shadow: 0 0 0 3px rgba(245, 179, 66, 0.12);
   }
+  .stTextArea textarea::placeholder { color: var(--text-dim); }
 
-  /* Tabs */
+  /* ── Tabs ────────────────────────────────────────────────────────────── */
   .stTabs [data-baseweb="tab-list"] {
-    gap: 0.2rem;
-    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    gap: 0.15rem;
+    border-bottom: 1px solid var(--border-soft);
   }
   .stTabs [data-baseweb="tab"] {
     background: transparent;
     border-radius: 0;
-    padding: 0.55rem 1rem;
-    color: #94a3b8;
+    padding: 0.6rem 1.1rem;
+    color: var(--text-low);
+    font-family: 'Inter Tight', sans-serif;
     font-size: 0.88rem;
+    font-weight: 500;
+    transition: color 0.15s ease;
   }
+  .stTabs [data-baseweb="tab"]:hover { color: var(--text-mid); }
   .stTabs [aria-selected="true"] {
-    color: #f1f5f9;
-    border-bottom: 2px solid #3b82f6;
+    color: var(--amber);
+    border-bottom: 2px solid var(--amber);
+  }
+
+  /* ── Expander ────────────────────────────────────────────────────────── */
+  .streamlit-expanderHeader, [data-testid="stExpander"] summary {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 0.85rem;
+    color: var(--text-low);
   }
 </style>
 """
@@ -253,32 +344,57 @@ CUSTOM_CSS = """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 
+# Small inline SVG logo mark (two stacked offset squares — microservices).
+LOGO_SVG = """
+<svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" class="ms-mark">
+  <defs>
+    <linearGradient id="lg1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f5b342"/>
+      <stop offset="100%" stop-color="#f47474"/>
+    </linearGradient>
+    <linearGradient id="lg2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#60a5fa"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="18" height="18" rx="3" fill="url(#lg1)" opacity="0.95"/>
+  <rect x="14" y="14" width="18" height="18" rx="3" fill="url(#lg2)" opacity="0.95"/>
+</svg>
+"""
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Session state
 # ─────────────────────────────────────────────────────────────────────────────
 
-if "result"        not in st.session_state: st.session_state.result        = None
-if "thread_id"     not in st.session_state: st.session_state.thread_id     = None
-if "status"        not in st.session_state: st.session_state.status        = None
-if "pending_input" not in st.session_state: st.session_state.pending_input = None
-if "pending_kind"  not in st.session_state: st.session_state.pending_kind  = None
+if "result"           not in st.session_state: st.session_state.result           = None
+if "thread_id"        not in st.session_state: st.session_state.thread_id        = None
+if "status"           not in st.session_state: st.session_state.status           = None
+if "pending_input"    not in st.session_state: st.session_state.pending_input    = None
+if "pending_kind"     not in st.session_state: st.session_state.pending_kind     = None
+if "attempt_done"     not in st.session_state: st.session_state.attempt_done     = set()
+if "last_retries"     not in st.session_state: st.session_state.last_retries     = 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Header
 # ─────────────────────────────────────────────────────────────────────────────
 
-st.markdown('<div class="ms-title">Microservice Studio</div>', unsafe_allow_html=True)
+st.markdown(
+    f'<div class="ms-header">{LOGO_SVG}<h1 class="ms-title">Microservice Studio</h1></div>',
+    unsafe_allow_html=True,
+)
 st.markdown(
     '<div class="ms-subtitle">'
-    'Describe a microservice. Get a security-reviewed, tested, dockerized FastAPI backend.'
+    'Describe a microservice. A team of agents designs, writes, reviews, tests, '
+    'and packages a production-ready FastAPI backend.'
     '</div>',
     unsafe_allow_html=True,
 )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Helpers
+# Constants & helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
 AGENT_PIPELINE = [
@@ -299,23 +415,13 @@ NODE_TO_CHIP = {
     "dockerize": "dockerize",
 }
 
-
-def completed_agents_from_logs(logs):
-    completed = set()
-    log_text = " ".join(logs).lower()
-    if "[validator] ✅" in log_text:  completed.add("validator")
-    if "[architect] ✅" in log_text:  completed.add("architect")
-    if "[developer] ✅" in log_text or "[developer] models.py and main.py written" in log_text:
-        completed.add("developer")
-    if "[security] ✅" in log_text:   completed.add("security")
-    if "[qa] ✅" in log_text:         completed.add("qa")
-    if "[dockerize] ✅" in log_text:  completed.add("dockerize")
-    return completed
+# Chips that participate in the developer→sec/qa→dockerize retry loop.
+RETRY_LOOP_CHIPS = {"developer", "security", "qa", "dockerize"}
 
 
 def render_timeline(active_set, status, completed):
     chips = []
-    terminal = status in ("success", "rejected", "needs_human", "failed", "accepted_partial")
+    terminal = status in ("rejected", "failed")
     for key, label in AGENT_PIPELINE:
         if key in completed:
             chips.append(f'<span class="chip chip-done">✓ {label}</span>')
@@ -333,21 +439,25 @@ def render_log(logs, waiting_message=None):
     for line in logs:
         css_class = "line-step"
         lower = line.lower()
-        if "✅" in line or " approved" in lower or "passed" in lower:
+        if line.startswith("--- "):
+            out.append(f'<span class="line-retry">{html_lib.escape(line)}</span>')
+            continue
+        if "approved" in lower or "passed" in lower or "generated." in lower:
             css_class = "line-ok"
-        elif "❌" in line or "failed" in lower or "rejected" in lower or "error" in lower:
+        elif "failed" in lower or "rejected" in lower or "error" in lower or "issue(s) found" in lower:
             css_class = "line-fail"
-        elif lower.startswith("[validator]") or lower.startswith("[architect]") or lower.startswith("[developer]"):
+        elif (lower.startswith("[validator]") or lower.startswith("[architect]")
+              or lower.startswith("[developer]")):
             css_class = "line-info"
-        out.append(f'<span class="{css_class}">{line}</span>')
+        out.append(f'<span class="{css_class}">{html_lib.escape(line)}</span>')
     if waiting_message:
-        out.append(f'<span class="line-wait">… {waiting_message}</span>')
+        out.append(f'<span class="line-wait">… {html_lib.escape(waiting_message)}</span>')
     return '<div class="terminal">' + "\n".join(out) + '</div>'
 
 
 def render_plan_card(plan_dict):
     if not plan_dict:
-        return ""
+        return '<div class="plan-card"><div class="plan-sub">No plan yet.</div></div>'
 
     models = plan_dict.get("models", []) or []
     endpoints = plan_dict.get("endpoints", []) or []
@@ -364,9 +474,9 @@ def render_plan_card(plan_dict):
             table = m.get("table_name", "?")
             fields = m.get("fields", []) or []
             parts.append(
-                f'<div style="margin-bottom:0.4rem;">'
-                f'<span style="color:#f1f5f9;font-weight:600;">{name}</span>'
-                f' <span class="plan-meta">· table: {table}</span>'
+                f'<div style="margin-bottom:0.45rem;">'
+                f'<span style="color:var(--text-hi);font-weight:600;">{html_lib.escape(name)}</span>'
+                f' <span class="plan-meta">· table: {html_lib.escape(table)}</span>'
                 f'</div>'
             )
             parts.append('<ul class="plan-list">')
@@ -375,7 +485,10 @@ def render_plan_card(plan_dict):
                 fname = f.get("name", "?")
                 ftype = f.get("type", "?")
                 nullable = "nullable" if f.get("nullable", True) else "required"
-                parts.append(f'<li>{fname}: {ftype} <span class="plan-meta">· {nullable}</span></li>')
+                parts.append(
+                    f'<li>{html_lib.escape(fname)}: {html_lib.escape(ftype)} '
+                    f'<span class="plan-meta">· {nullable}</span></li>'
+                )
             parts.append('</ul>')
 
     if endpoints:
@@ -389,119 +502,49 @@ def render_plan_card(plan_dict):
             parts.append(
                 f'<li>'
                 f'<span class="plan-method {method_class}">{method}</span>'
-                f'<code style="color:#e2e8f0;background:transparent;">{path}</code>'
-                f' <span class="plan-meta">— {desc}</span>'
+                f'<code style="color:var(--text-hi);background:transparent;font-family:JetBrains Mono,monospace;">'
+                f'{html_lib.escape(path)}</code>'
+                f' <span class="plan-meta">— {html_lib.escape(desc)}</span>'
                 f'</li>'
             )
         parts.append('</ul>')
 
     if notes:
         parts.append('<div class="plan-section">Notes</div>')
-        parts.append(f'<div style="color:#cbd5e1; font-size:0.85rem;">{notes}</div>')
+        parts.append(f'<div style="color:var(--text-mid); font-size:0.86rem;">{html_lib.escape(notes)}</div>')
 
     parts.append('</div>')
     return "".join(parts)
 
 
-def render_security_panel(approved, feedback):
-    """approved can be None (not yet run), True, or False."""
-    if approved is None:
-        return ""
-    if approved:
-        return (
-            '<div class="sec-panel ok">'
-            '<h4>Security review <span class="sec-status ok">PASSED</span></h4>'
-            '<div class="sec-rules">'
-            'Scanned with bandit for: '
-            '<span class="sec-rule-chip">B102 exec</span>'
-            '<span class="sec-rule-chip">B307 eval</span>'
-            '<span class="sec-rule-chip">B602 shell=True</span>'
-            '<span class="sec-rule-chip">B605 shell exec</span>'
-            '</div>'
-            '<div style="color:#94a3b8; font-size:0.82rem; margin-top:0.5rem;">'
-            'No critical findings. Syntax valid.'
-            '</div>'
-            '</div>'
-        )
-    # failed
-    safe_feedback = (feedback or "(no detail)").replace("<", "&lt;").replace(">", "&gt;")
-    return (
-        '<div class="sec-panel bad">'
-        '<h4>Security review <span class="sec-status bad">FAILED</span></h4>'
-        '<div style="color:#fca5a5; font-size:0.85rem; margin-top:0.5rem; white-space:pre-wrap; font-family:ui-monospace,monospace;">'
-        f'{safe_feedback}'
-        '</div>'
-        '</div>'
-    )
-
-
-def render_progressive_artifacts(snapshot_state):
-    """
-    Render whatever is available right now: plan, code tabs, security, tests, dockerfile.
-    Each section appears only if its data exists. This is what makes the stream
-    feel alive instead of dumping everything at the end.
-    """
+def show_progressive_section(container, snapshot_state):
     plan       = snapshot_state.get("architecture_plan")
     models_py  = snapshot_state.get("models_py")
     main_py    = snapshot_state.get("main_py")
     test_cases = snapshot_state.get("test_cases")
     dockerfile = snapshot_state.get("dockerfile")
-    sec_appr   = snapshot_state.get("security_approved")
-    sec_done   = "[security] ✅" in " ".join(snapshot_state.get("agent_logs", [])).lower() \
-                 or sec_appr is False and bool(snapshot_state.get("security_feedback"))
     qa_res     = snapshot_state.get("qa_results")
 
-    parts_html = []
-
-    # Plan
-    if plan:
-        parts_html.append(('plan', render_plan_card(plan)))
-
-    # Security
-    if sec_done:
-        approved = bool(sec_appr)
-        parts_html.append(('security', render_security_panel(approved, snapshot_state.get("security_feedback"))))
-
-    return parts_html, {
-        "models_py":  models_py,
-        "main_py":    main_py,
-        "test_cases": test_cases if qa_res in ("pass", "fail") else None,
-        "dockerfile": dockerfile,
-    }
-
-
-def show_progressive_section(container, snapshot_state):
-    """Render the live artifacts inside a single container by clearing and rewriting."""
-    sections, code_files = render_progressive_artifacts(snapshot_state)
-
     with container.container():
-        # Plan + security panels stack vertically.
-        for kind, html in sections:
-            st.markdown(f'<div class="section-label">{ "Plan" if kind=="plan" else "Security" }</div>', unsafe_allow_html=True)
-            st.markdown(html, unsafe_allow_html=True)
+        st.markdown('<div class="section-label">Artifacts</div>', unsafe_allow_html=True)
 
-        # Code tabs appear only when there's something to show.
-        tab_labels = []
-        tab_contents = []
-        if code_files["main_py"]:
-            tab_labels.append("main.py")
-            tab_contents.append(("python", code_files["main_py"]))
-        if code_files["models_py"]:
-            tab_labels.append("models.py")
-            tab_contents.append(("python", code_files["models_py"]))
-        if code_files["test_cases"]:
-            tab_labels.append("tests")
-            tab_contents.append(("python", code_files["test_cases"]))
-        if code_files["dockerfile"]:
-            tab_labels.append("Dockerfile")
-            tab_contents.append(("dockerfile", code_files["dockerfile"]))
+        tab_specs = [("Plan", "plan", plan)]
+        if main_py:
+            tab_specs.append(("main.py", "python", main_py))
+        if models_py:
+            tab_specs.append(("models.py", "python", models_py))
+        if test_cases and qa_res in ("pass", "fail"):
+            tab_specs.append(("tests", "python", test_cases))
+        if dockerfile:
+            tab_specs.append(("Dockerfile", "dockerfile", dockerfile))
 
-        if tab_labels:
-            st.markdown('<div class="section-label">Generated files</div>', unsafe_allow_html=True)
-            tabs = st.tabs(tab_labels)
-            for tab, (lang, content) in zip(tabs, tab_contents):
-                with tab:
-                    st.code(content, language=lang)
+        tabs = st.tabs([spec[0] for spec in tab_specs])
+        for tab, (_, lang, content) in zip(tabs, tab_specs):
+            with tab:
+                if lang == "plan":
+                    st.markdown(render_plan_card(content), unsafe_allow_html=True)
+                else:
+                    st.code(content, language=lang, height=420)
 
 
 def security_failed(result):
@@ -510,6 +553,24 @@ def security_failed(result):
 
 def qa_failed(result):
     return result.get("qa_results") == "fail"
+
+
+def completed_from_state(state, run_status):
+    done = set()
+    if state.get("architecture_plan"):
+        done.add("validator")
+        done.add("architect")
+    if state.get("models_py") and state.get("main_py"):
+        done.add("developer")
+    if state.get("security_approved") is True:
+        done.add("security")
+    if state.get("qa_results") == "pass":
+        done.add("qa")
+    if state.get("dockerfile"):
+        done.add("dockerize")
+    if run_status == "success":
+        done.update(k for k, _ in AGENT_PIPELINE)
+    return done
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -540,6 +601,8 @@ if generate and requirements.strip():
     st.session_state.status        = "running"
     st.session_state.pending_input = initial_state(requirements)
     st.session_state.pending_kind  = "new"
+    st.session_state.attempt_done  = set()
+    st.session_state.last_retries  = 0
     st.rerun()
 
 
@@ -561,34 +624,33 @@ if st.session_state.pending_input is not None and st.session_state.thread_id:
             unsafe_allow_html=True,
         )
 
-    # Layout slots in render order.
     st.markdown('<div class="section-label">Pipeline</div>', unsafe_allow_html=True)
-    timeline_box = st.empty()
-    artifacts_box = st.empty()  # plan, security, code tabs — rewritten on each event
+    timeline_box  = st.empty()
+    artifacts_box = st.empty()
     st.markdown('<div class="section-label">Agent activity</div>', unsafe_allow_html=True)
     log_box = st.empty()
 
     timeline_box.markdown(
-        render_timeline({"validator"}, "running", set()),
+        render_timeline({"validator"}, "running", st.session_state.attempt_done),
         unsafe_allow_html=True,
     )
 
     logs = []
-    accumulated_state = {}  # we'll merge each node's update into this
+    accumulated_state = {}
+    retry_count_seen = 0
 
-    # Determines what's "active right now" from what just finished
-    def predict_active(finished_now, completed_so_far):
+    def predict_active(just_finished_node, completed_so_far):
         nxt = set()
-        if "validator" in finished_now: nxt.add("architect")
-        if "architect" in finished_now: nxt.add("developer")
-        if "developer" in finished_now: nxt.update({"security", "qa"})
-        if "security" in finished_now or "qa" in finished_now:
+        if just_finished_node == "validator": nxt.add("architect")
+        elif just_finished_node == "architect": nxt.add("developer")
+        elif just_finished_node == "developer":
+            nxt.update({"security", "qa"})
+        elif just_finished_node in ("security", "qa"):
             if "security" not in completed_so_far: nxt.add("security")
             if "qa"       not in completed_so_far: nxt.add("qa")
             if {"security", "qa"} <= completed_so_far: nxt.add("dockerize")
         return nxt - completed_so_far
 
-    # Human-readable "what are we waiting on" message for the log
     def waiting_label(active):
         if not active: return None
         labels = {
@@ -604,33 +666,48 @@ if st.session_state.pending_input is not None and st.session_state.thread_id:
         return ", ".join(labels[a] for a in active if a in labels)
 
     for event in graph.stream(stream_input, config=config, stream_mode="updates"):
+        # Detect retry: increment_retry appears as its own event.
+        if "increment_retry" in event.keys():
+            retry_count_seen += 1
+            logs.append(f"--- Retry attempt {retry_count_seen + 1} starting ---")
+            # Only reset chips that will actually re-run. Validator+Architect stay green.
+            st.session_state.attempt_done -= RETRY_LOOP_CHIPS
+
         nodes_in_event = [n for n in event.keys()
-                          if n not in ("__start__", "increment_retry", "verifier_join")]
+                          if n not in ("__start__", "verifier_join", "increment_retry")]
+
+        latest_finished = None
 
         for node in nodes_in_event:
             node_state = event[node]
             if not isinstance(node_state, dict):
                 continue
 
-            # Merge into accumulated_state so artifacts panel has everything so far.
-            # For agent_logs we dedupe and append; for other keys we overwrite.
+            # Append agent logs without dedup. Retries emit identical starter
+            # lines and we want to see them every time.
+            for line in node_state.get("agent_logs", []) or []:
+                logs.append(line)
             for k, v in node_state.items():
-                if k == "agent_logs":
-                    for line in v or []:
-                        if line not in logs:
-                            logs.append(line)
-                else:
+                if k != "agent_logs":
                     accumulated_state[k] = v
             accumulated_state["agent_logs"] = logs
 
-        # Recompute UI state
+            chip_key = NODE_TO_CHIP.get(node)
+            if chip_key:
+                st.session_state.attempt_done.add(chip_key)
+                latest_finished = chip_key
+
         finished_now = {NODE_TO_CHIP.get(n) for n in nodes_in_event if NODE_TO_CHIP.get(n)}
-        done_set     = completed_agents_from_logs(logs)
-        active_set   = predict_active(finished_now, done_set)
-        waiting_msg  = waiting_label(active_set)
+        active_set = set()
+        if "security" in finished_now or "qa" in finished_now:
+            active_set = predict_active("security", st.session_state.attempt_done)
+        elif latest_finished:
+            active_set = predict_active(latest_finished, st.session_state.attempt_done)
+
+        waiting_msg = waiting_label(active_set)
 
         timeline_box.markdown(
-            render_timeline(active_set, "running", done_set),
+            render_timeline(active_set, "running", st.session_state.attempt_done),
             unsafe_allow_html=True,
         )
         show_progressive_section(artifacts_box, accumulated_state)
@@ -644,12 +721,13 @@ if st.session_state.pending_input is not None and st.session_state.thread_id:
         new_status = final.get("status") or "failed"
 
     timeline_box.markdown(
-        render_timeline(set(), new_status, completed_agents_from_logs(final.get("agent_logs", logs))),
+        render_timeline(set(), new_status, st.session_state.attempt_done),
         unsafe_allow_html=True,
     )
 
-    st.session_state.result = final
-    st.session_state.status = new_status
+    st.session_state.result       = final
+    st.session_state.status       = new_status
+    st.session_state.last_retries = final.get("retries", 0)
     st.rerun()
 
 
@@ -668,12 +746,9 @@ if status == "success" and result:
     )
 
     st.markdown('<div class="section-label">Pipeline</div>', unsafe_allow_html=True)
-    st.markdown(
-        render_timeline(set(), status, completed_agents_from_logs(result.get("agent_logs", []))),
-        unsafe_allow_html=True,
-    )
+    done = completed_from_state(result, status)
+    st.markdown(render_timeline(set(), status, done), unsafe_allow_html=True)
 
-    # Reuse progressive layout for consistency
     final_container = st.empty()
     show_progressive_section(final_container, result)
 
@@ -720,15 +795,7 @@ elif status == "needs_human" and result:
         unsafe_allow_html=True,
     )
 
-    st.markdown('<div class="section-label">Pipeline</div>', unsafe_allow_html=True)
-    st.markdown(
-        render_timeline(set(), status, completed_agents_from_logs(result.get("agent_logs", []))),
-        unsafe_allow_html=True,
-    )
-
-    final_container = st.empty()
-    show_progressive_section(final_container, result)
-
+    # HITL action moved to the top — it's the priority right now.
     st.markdown('<div class="section-label">Your call</div>', unsafe_allow_html=True)
     new_req = st.text_area(
         "clarify",
@@ -741,9 +808,22 @@ elif status == "needs_human" and result:
     retry_clicked  = c1.button("Retry with clarification", use_container_width=True, key=f"hitl_retry_{attempt}")
     accept_clicked = c2.button("Accept what we have",      use_container_width=True, key=f"hitl_accept_{attempt}")
 
+    st.markdown('<div class="section-label">Pipeline</div>', unsafe_allow_html=True)
+    done = completed_from_state(result, status)
+    st.markdown(render_timeline(set(), status, done), unsafe_allow_html=True)
+
+    final_container = st.empty()
+    show_progressive_section(final_container, result)
+
+    if sec_bad:
+        st.markdown('<div class="section-label">Security findings</div>', unsafe_allow_html=True)
+        st.code(result.get("security_feedback") or "(no detail)", language="text")
     if qa_bad:
         st.markdown('<div class="section-label">QA output</div>', unsafe_allow_html=True)
         st.code(result.get("qa_output") or "(no detail)", language="text")
+
+    with st.expander("Agent activity log"):
+        st.markdown(render_log(result.get("agent_logs", [])), unsafe_allow_html=True)
 
     if retry_clicked:
         clarified = new_req.strip() or result.get("user_requirements", "")
@@ -752,6 +832,7 @@ elif status == "needs_human" and result:
             resume={"action": "retry", "clarified_requirements": clarified}
         )
         st.session_state.pending_kind  = "resume"
+        st.session_state.attempt_done -= RETRY_LOOP_CHIPS
         st.rerun()
 
     if accept_clicked:
@@ -768,10 +849,8 @@ elif status == "accepted_partial" and result:
     )
 
     st.markdown('<div class="section-label">Pipeline</div>', unsafe_allow_html=True)
-    st.markdown(
-        render_timeline(set(), status, completed_agents_from_logs(result.get("agent_logs", []))),
-        unsafe_allow_html=True,
-    )
+    done = completed_from_state(result, status)
+    st.markdown(render_timeline(set(), status, done), unsafe_allow_html=True)
 
     final_container = st.empty()
     show_progressive_section(final_container, result)

@@ -6,6 +6,7 @@ import os
 import ast
 import subprocess
 import tempfile
+import threading
 from typing import Any
 
 from dotenv import load_dotenv
@@ -24,8 +25,11 @@ with open("template/database.py") as f:
 with open("template/conftest.py") as f:
     CONFTEST = f.read()
 
-_current_models_py: str = ""
-_current_main_py: str = ""
+
+# Per-thread storage so concurrent users don't overwrite each other's code.
+# Streamlit runs each session on its own thread, so this isolates them.
+_qa_local = threading.local()
+
 
 @tool
 def run_tests(test_code: str) -> dict[str, Any]:
@@ -44,11 +48,14 @@ def run_tests(test_code: str) -> dict[str, Any]:
     except SyntaxError as e:
         return {"passed": False, "output": f"Test code has a syntax error: {e}", "syntax_ok": False}
 
+    models_py = getattr(_qa_local, "models_py", "")
+    main_py   = getattr(_qa_local, "main_py", "")
+
     with tempfile.TemporaryDirectory() as tmpdir:
         files = {
             "database.py":  DATABASE_PY,
-            "models.py":    _current_models_py,
-            "main.py":      _current_main_py,
+            "models.py":    models_py,
+            "main.py":      main_py,
             "test_main.py": test_code,
             "conftest.py":  CONFTEST,
         }
@@ -56,13 +63,10 @@ def run_tests(test_code: str) -> dict[str, Any]:
             with open(os.path.join(tmpdir, name), "w") as f:
                 f.write(content)
 
-        pip = subprocess.run(
-            ["pip", "install", "-q", "fastapi", "sqlalchemy", "pytest", "httpx", "anyio"],
-            cwd=tmpdir, capture_output=True, text=True, timeout=120,
-        )
-        if pip.returncode != 0:
-            return {"passed": False, "output": f"pip install failed:\n{pip.stderr}", "syntax_ok": True}
-
+        # Skip the per-run pip install. The parent environment already has
+        # fastapi, sqlalchemy, pytest, httpx, anyio installed (see
+        # requirements.txt). The pytest subprocess inherits site-packages
+        # from the same Python interpreter.
         result = subprocess.run(
             ["python", "-m", "pytest", "test_main.py", "-v", "--tb=short"],
             cwd=tmpdir,
@@ -110,6 +114,8 @@ qa_agent_runtime = create_agent(
 )
 
 
+# ── Node ──────────────────────────────────────────────────────────────────────
+
 def qa_node(state: dict) -> dict:
     start_log     = "[QA] Generating pytest test cases..."
     sandbox_log   = "[QA] Spinning up sandbox and installing dependencies..."
@@ -117,9 +123,10 @@ def qa_node(state: dict) -> dict:
     print(start_log)
     print(sandbox_log)
     print(run_log)
-    global _current_models_py, _current_main_py
-    _current_models_py = state["models_py"]
-    _current_main_py = state["main_py"]
+
+    # Stash the current run's code on the thread-local so run_tests can read it.
+    _qa_local.models_py = state["models_py"]
+    _qa_local.main_py   = state["main_py"]
 
     user_message = f"""Write and run pytest tests for this FastAPI app.
 
@@ -148,10 +155,11 @@ Write tests covering every endpoint, then call run_tests to verify them."""
             "agent_logs": [start_log, sandbox_log, run_log, error_msg],
             "error_messages": [error_msg],
         }
+
     if passed:
-        result_log = f"[QA] ✅ All tests passed — {summary}"
+        result_log = f"[QA] All tests passed — {summary}"
     else:
-        result_log = f"[QA] ❌ Tests failed — {summary}"
+        result_log = f"[QA] Tests failed — {summary}"
     print(result_log)
 
     return {
