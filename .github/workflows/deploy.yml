@@ -20,9 +20,10 @@ jobs:
           script: |
             cd /home/ubuntu/microservice-studio
             git pull origin main
-            docker build -t microservice-studio .
             docker stop app 2>/dev/null || true
             docker rm app 2>/dev/null || true
+            docker system prune -af
+            docker build -t microservice-studio .
             docker run -d --name app -p 8501:8501 -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY -e ANTHROPIC_MODEL=$ANTHROPIC_MODEL --restart unless-stopped microservice-studio
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
