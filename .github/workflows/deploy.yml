@@ -1,0 +1,30 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/microservice-studio
+            git pull origin main
+            docker build -t microservice-studio .
+            docker stop app 2>/dev/null || true
+            docker rm app 2>/dev/null || true
+            docker run -d --name app \
+              -p 8501:8501 \
+              -e ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} \
+              -e ANTHROPIC_MODEL=${{ secrets.ANTHROPIC_MODEL }} \
+              --restart unless-stopped \
+              microservice-studio
