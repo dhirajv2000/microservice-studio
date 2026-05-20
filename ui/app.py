@@ -386,8 +386,10 @@ st.markdown(
 )
 st.markdown(
     '<div class="ms-subtitle">'
-    'Describe a microservice. A team of agents designs, writes, reviews, tests, '
-    'and packages a production-ready FastAPI backend.'
+    'Describe the backend you want, and a coordinated team of AI agents will '
+    'architect, code, review, test, debug, and package a production-ready '
+    'FastAPI microservice in real time — complete with API design, database '
+    'models, validation, testing, Dockerization, and deployment-ready infrastructure.'
     '</div>',
     unsafe_allow_html=True,
 )
