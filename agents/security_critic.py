@@ -160,13 +160,16 @@ def security_critic_node(state: dict) -> dict:
     if approved:
         result_log = "[Security]Approved — no critical findings."
         feedback = None
+        log_lines = [start_log, syntax_log, bandit_log, result_log]
     else:
         result_log = f"[Security] {len(issues)} issue(s) found."
         feedback = "\n".join(f"- {i}" for i in issues)
+        issue_lines = [f"[Security]   • {i}" for i in issues]
+        log_lines = [start_log, syntax_log, bandit_log, result_log] + issue_lines
 
     print(result_log)
     return {
         "security_approved": approved,
         "security_feedback": feedback,
-        "agent_logs": [start_log, syntax_log, bandit_log, result_log],
+        "agent_logs": log_lines,
     }
