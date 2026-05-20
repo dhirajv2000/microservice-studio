@@ -1,7 +1,6 @@
 import operator
 from typing import TypedDict, Annotated, List, Optional
 
-
 class AgentState(TypedDict):
     # Input
     user_requirements: str
