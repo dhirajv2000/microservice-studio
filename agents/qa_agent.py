@@ -26,9 +26,8 @@ with open("template/conftest.py") as f:
     CONFTEST = f.read()
 
 
-# Per-thread storage so concurrent users don't overwrite each other's code.
-# Streamlit runs each session on its own thread, so this isolates them.
-_qa_local = threading.local()
+_qa_code_lock = threading.Lock()
+_qa_code_by_thread: dict[int, dict] = {}
 
 
 @tool
@@ -48,8 +47,21 @@ def run_tests(test_code: str) -> dict[str, Any]:
     except SyntaxError as e:
         return {"passed": False, "output": f"Test code has a syntax error: {e}", "syntax_ok": False}
 
-    models_py = getattr(_qa_local, "models_py", "")
-    main_py   = getattr(_qa_local, "main_py", "")
+    with _qa_code_lock:
+        ident = threading.get_ident()
+        code = _qa_code_by_thread.get(ident)
+        if code is None and _qa_code_by_thread:
+            # Use the most recently written entry.
+            code = list(_qa_code_by_thread.values())[-1]
+    models_py = code["models_py"] if code else ""
+    main_py   = code["main_py"]   if code else ""
+
+    if not models_py or not main_py:
+        return {
+            "passed": False,
+            "output": "QA tool could not locate the generated code (models.py or main.py was empty).",
+            "syntax_ok": True,
+        }
 
     with tempfile.TemporaryDirectory() as tmpdir:
         files = {
@@ -63,10 +75,6 @@ def run_tests(test_code: str) -> dict[str, Any]:
             with open(os.path.join(tmpdir, name), "w") as f:
                 f.write(content)
 
-        # Skip the per-run pip install. The parent environment already has
-        # fastapi, sqlalchemy, pytest, httpx, anyio installed (see
-        # requirements.txt). The pytest subprocess inherits site-packages
-        # from the same Python interpreter.
         result = subprocess.run(
             ["python", "-m", "pytest", "test_main.py", "-v", "--tb=short"],
             cwd=tmpdir,
@@ -124,9 +132,12 @@ def qa_node(state: dict) -> dict:
     print(sandbox_log)
     print(run_log)
 
-    # Stash the current run's code on the thread-local so run_tests can read it.
-    _qa_local.models_py = state["models_py"]
-    _qa_local.main_py   = state["main_py"]
+    # Stash this run's code keyed by the current thread.
+    with _qa_code_lock:
+        _qa_code_by_thread[threading.get_ident()] = {
+            "models_py": state["models_py"],
+            "main_py":   state["main_py"],
+        }
 
     user_message = f"""Write and run pytest tests for this FastAPI app.
 
