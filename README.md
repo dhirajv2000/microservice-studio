@@ -27,7 +27,7 @@ The system produces a complete project: `main.py`, `models.py`, `database.py`,
 
 ## Architecture
 
-Six specialized agents plus a human-in-the-loop checkpoint, orchestrated by
+Four specialized agents, Two deterministic nodes, plus a human-in-the-loop checkpoint, orchestrated by
 LangGraph.
 
 ![Architecture](docs/architecture.png)
