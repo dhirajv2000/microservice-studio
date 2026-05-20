@@ -103,6 +103,7 @@ CUSTOM_CSS = """
   .terminal .line-fail  { color: #fca5a5; }
   .terminal .line-info  { color: #93c5fd; }
   .terminal .line-step  { color: #cbd5e1; }
+  .terminal .line-wait  { color: #fde047; font-style: italic; }
 
   /* Plan card */
   .plan-card {
@@ -117,11 +118,7 @@ CUSTOM_CSS = """
     font-size: 0.95rem;
     font-weight: 600;
   }
-  .plan-sub {
-    color: #64748b;
-    font-size: 0.78rem;
-    margin-bottom: 0.9rem;
-  }
+  .plan-sub { color: #64748b; font-size: 0.78rem; margin-bottom: 0.9rem; }
   .plan-section {
     color: #64748b;
     font-size: 0.7rem;
@@ -150,6 +147,38 @@ CUSTOM_CSS = """
   .method-POST   { background: rgba(34, 197, 94, 0.18);  color: #86efac; }
   .method-PUT    { background: rgba(234, 179, 8, 0.18);  color: #fde047; }
   .method-DELETE { background: rgba(239, 68, 68, 0.18);  color: #fca5a5; }
+
+  /* Security panel */
+  .sec-panel {
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+  }
+  .sec-panel.ok   { border-color: rgba(34, 197, 94, 0.35); }
+  .sec-panel.bad  { border-color: rgba(239, 68, 68, 0.4); }
+  .sec-panel h4 { color: #f1f5f9; margin: 0 0 0.2rem 0; font-size: 0.95rem; font-weight: 600; }
+  .sec-status {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 0.4rem;
+  }
+  .sec-status.ok  { background: rgba(34, 197, 94, 0.15);  color: #86efac; }
+  .sec-status.bad { background: rgba(239, 68, 68, 0.15);  color: #fca5a5; }
+  .sec-rules { color: #94a3b8; font-size: 0.8rem; margin-top: 0.5rem; line-height: 1.6; }
+  .sec-rule-chip {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    background: rgba(59, 130, 246, 0.12);
+    color: #93c5fd;
+    border-radius: 4px;
+    font-family: ui-monospace, monospace;
+    font-size: 0.72rem;
+    margin-right: 0.3rem;
+  }
 
   /* Banners */
   .banner {
@@ -186,9 +215,7 @@ CUSTOM_CSS = """
     font-weight: 500;
     padding: 0.55rem 1.3rem;
   }
-  .stDownloadButton > button:hover {
-    background: rgba(34, 197, 94, 0.22);
-  }
+  .stDownloadButton > button:hover { background: rgba(34, 197, 94, 0.22); }
 
   /* Inputs */
   .stTextArea textarea {
@@ -287,13 +314,11 @@ def completed_agents_from_logs(logs):
 
 
 def render_timeline(active_set, status, completed):
-    """active_set is a set of chip keys currently running."""
     chips = []
     terminal = status in ("success", "rejected", "needs_human", "failed", "accepted_partial")
     for key, label in AGENT_PIPELINE:
         if key in completed:
-            cls, icon = "chip-done", "✓"
-            chips.append(f'<span class="chip {cls}">{icon} {label}</span>')
+            chips.append(f'<span class="chip chip-done">✓ {label}</span>')
         elif key in active_set and not terminal:
             chips.append(f'<span class="chip chip-active"><span class="dot"></span>{label}</span>')
         elif status == "failed" and key in active_set:
@@ -303,7 +328,7 @@ def render_timeline(active_set, status, completed):
     return f'<div class="agent-row">{"".join(chips)}</div>'
 
 
-def render_log(logs):
+def render_log(logs, waiting_message=None):
     out = []
     for line in logs:
         css_class = "line-step"
@@ -315,6 +340,8 @@ def render_log(logs):
         elif lower.startswith("[validator]") or lower.startswith("[architect]") or lower.startswith("[developer]"):
             css_class = "line-info"
         out.append(f'<span class="{css_class}">{line}</span>')
+    if waiting_message:
+        out.append(f'<span class="line-wait">… {waiting_message}</span>')
     return '<div class="terminal">' + "\n".join(out) + '</div>'
 
 
@@ -328,9 +355,7 @@ def render_plan_card(plan_dict):
 
     parts = ['<div class="plan-card">']
     parts.append('<h4>Architecture plan</h4>')
-    parts.append(
-        f'<div class="plan-sub">{len(models)} model · {len(endpoints)} endpoint</div>'
-    )
+    parts.append(f'<div class="plan-sub">{len(models)} model · {len(endpoints)} endpoint</div>')
 
     if models:
         parts.append('<div class="plan-section">Models</div>')
@@ -378,19 +403,105 @@ def render_plan_card(plan_dict):
     return "".join(parts)
 
 
-def show_timeline(active_set, status, logs):
-    st.markdown('<div class="section-label">Pipeline</div>', unsafe_allow_html=True)
-    st.markdown(
-        render_timeline(active_set, status, completed_agents_from_logs(logs)),
-        unsafe_allow_html=True,
+def render_security_panel(approved, feedback):
+    """approved can be None (not yet run), True, or False."""
+    if approved is None:
+        return ""
+    if approved:
+        return (
+            '<div class="sec-panel ok">'
+            '<h4>Security review <span class="sec-status ok">PASSED</span></h4>'
+            '<div class="sec-rules">'
+            'Scanned with bandit for: '
+            '<span class="sec-rule-chip">B102 exec</span>'
+            '<span class="sec-rule-chip">B307 eval</span>'
+            '<span class="sec-rule-chip">B602 shell=True</span>'
+            '<span class="sec-rule-chip">B605 shell exec</span>'
+            '</div>'
+            '<div style="color:#94a3b8; font-size:0.82rem; margin-top:0.5rem;">'
+            'No critical findings. Syntax valid.'
+            '</div>'
+            '</div>'
+        )
+    # failed
+    safe_feedback = (feedback or "(no detail)").replace("<", "&lt;").replace(">", "&gt;")
+    return (
+        '<div class="sec-panel bad">'
+        '<h4>Security review <span class="sec-status bad">FAILED</span></h4>'
+        '<div style="color:#fca5a5; font-size:0.85rem; margin-top:0.5rem; white-space:pre-wrap; font-family:ui-monospace,monospace;">'
+        f'{safe_feedback}'
+        '</div>'
+        '</div>'
     )
 
 
-def show_logs(logs):
-    if not logs:
-        return
-    st.markdown('<div class="section-label">Agent activity</div>', unsafe_allow_html=True)
-    st.markdown(render_log(logs), unsafe_allow_html=True)
+def render_progressive_artifacts(snapshot_state):
+    """
+    Render whatever is available right now: plan, code tabs, security, tests, dockerfile.
+    Each section appears only if its data exists. This is what makes the stream
+    feel alive instead of dumping everything at the end.
+    """
+    plan       = snapshot_state.get("architecture_plan")
+    models_py  = snapshot_state.get("models_py")
+    main_py    = snapshot_state.get("main_py")
+    test_cases = snapshot_state.get("test_cases")
+    dockerfile = snapshot_state.get("dockerfile")
+    sec_appr   = snapshot_state.get("security_approved")
+    sec_done   = "[security] ✅" in " ".join(snapshot_state.get("agent_logs", [])).lower() \
+                 or sec_appr is False and bool(snapshot_state.get("security_feedback"))
+    qa_res     = snapshot_state.get("qa_results")
+
+    parts_html = []
+
+    # Plan
+    if plan:
+        parts_html.append(('plan', render_plan_card(plan)))
+
+    # Security
+    if sec_done:
+        approved = bool(sec_appr)
+        parts_html.append(('security', render_security_panel(approved, snapshot_state.get("security_feedback"))))
+
+    return parts_html, {
+        "models_py":  models_py,
+        "main_py":    main_py,
+        "test_cases": test_cases if qa_res in ("pass", "fail") else None,
+        "dockerfile": dockerfile,
+    }
+
+
+def show_progressive_section(container, snapshot_state):
+    """Render the live artifacts inside a single container by clearing and rewriting."""
+    sections, code_files = render_progressive_artifacts(snapshot_state)
+
+    with container.container():
+        # Plan + security panels stack vertically.
+        for kind, html in sections:
+            st.markdown(f'<div class="section-label">{ "Plan" if kind=="plan" else "Security" }</div>', unsafe_allow_html=True)
+            st.markdown(html, unsafe_allow_html=True)
+
+        # Code tabs appear only when there's something to show.
+        tab_labels = []
+        tab_contents = []
+        if code_files["main_py"]:
+            tab_labels.append("main.py")
+            tab_contents.append(("python", code_files["main_py"]))
+        if code_files["models_py"]:
+            tab_labels.append("models.py")
+            tab_contents.append(("python", code_files["models_py"]))
+        if code_files["test_cases"]:
+            tab_labels.append("tests")
+            tab_contents.append(("python", code_files["test_cases"]))
+        if code_files["dockerfile"]:
+            tab_labels.append("Dockerfile")
+            tab_contents.append(("dockerfile", code_files["dockerfile"]))
+
+        if tab_labels:
+            st.markdown('<div class="section-label">Generated files</div>', unsafe_allow_html=True)
+            tabs = st.tabs(tab_labels)
+            for tab, (lang, content) in zip(tabs, tab_contents):
+                with tab:
+                    st.code(content, language=lang)
 
 
 def security_failed(result):
@@ -450,11 +561,12 @@ if st.session_state.pending_input is not None and st.session_state.thread_id:
             unsafe_allow_html=True,
         )
 
+    # Layout slots in render order.
     st.markdown('<div class="section-label">Pipeline</div>', unsafe_allow_html=True)
     timeline_box = st.empty()
-    plan_box     = st.empty()
+    artifacts_box = st.empty()  # plan, security, code tabs — rewritten on each event
     st.markdown('<div class="section-label">Agent activity</div>', unsafe_allow_html=True)
-    log_box      = st.empty()
+    log_box = st.empty()
 
     timeline_box.markdown(
         render_timeline({"validator"}, "running", set()),
@@ -462,76 +574,67 @@ if st.session_state.pending_input is not None and st.session_state.thread_id:
     )
 
     logs = []
-    active_set = set()
-    plan_rendered = False
+    accumulated_state = {}  # we'll merge each node's update into this
+
+    # Determines what's "active right now" from what just finished
+    def predict_active(finished_now, completed_so_far):
+        nxt = set()
+        if "validator" in finished_now: nxt.add("architect")
+        if "architect" in finished_now: nxt.add("developer")
+        if "developer" in finished_now: nxt.update({"security", "qa"})
+        if "security" in finished_now or "qa" in finished_now:
+            if "security" not in completed_so_far: nxt.add("security")
+            if "qa"       not in completed_so_far: nxt.add("qa")
+            if {"security", "qa"} <= completed_so_far: nxt.add("dockerize")
+        return nxt - completed_so_far
+
+    # Human-readable "what are we waiting on" message for the log
+    def waiting_label(active):
+        if not active: return None
+        labels = {
+            "validator": "validator running",
+            "architect": "architect designing the API",
+            "developer": "developer writing code",
+            "security":  "security scanning code",
+            "qa":        "QA generating and running tests",
+            "dockerize": "dockerize packaging",
+        }
+        if {"security", "qa"} <= active:
+            return "security and QA running in parallel"
+        return ", ".join(labels[a] for a in active if a in labels)
 
     for event in graph.stream(stream_input, config=config, stream_mode="updates"):
-        # Each event can carry multiple nodes (parallel fan-out: security + qa).
-        # First pass: collect every node that yielded in this tick so chips
-        # reflect what just ran, even if both finished at the same time.
-        nodes_in_event = [n for n in event.keys() if n not in ("__start__", "increment_retry", "verifier_join")]
+        nodes_in_event = [n for n in event.keys()
+                          if n not in ("__start__", "increment_retry", "verifier_join")]
 
         for node in nodes_in_event:
             node_state = event[node]
             if not isinstance(node_state, dict):
                 continue
 
-            # Append any new log lines from this node.
-            for line in node_state.get("agent_logs", []):
-                if line not in logs:
-                    logs.append(line)
+            # Merge into accumulated_state so artifacts panel has everything so far.
+            # For agent_logs we dedupe and append; for other keys we overwrite.
+            for k, v in node_state.items():
+                if k == "agent_logs":
+                    for line in v or []:
+                        if line not in logs:
+                            logs.append(line)
+                else:
+                    accumulated_state[k] = v
+            accumulated_state["agent_logs"] = logs
 
-            # Mark this node as having run (it finished, which is why we got
-            # the event). Remove from "active" — completion comes from logs.
-            chip_key = NODE_TO_CHIP.get(node)
-            if chip_key:
-                active_set.discard(chip_key)
-
-            # Plan card appears as soon as architect yields.
-            if node == "architect" and not plan_rendered:
-                plan_dict = node_state.get("architecture_plan")
-                if plan_dict:
-                    plan_box.markdown(render_plan_card(plan_dict), unsafe_allow_html=True)
-                    plan_rendered = True
-
-        # Predict which nodes are about to run next based on what just finished.
-        # This lets the chip light up DURING the next phase, not after.
-        next_active = set()
+        # Recompute UI state
         finished_now = {NODE_TO_CHIP.get(n) for n in nodes_in_event if NODE_TO_CHIP.get(n)}
-        if "validator" in finished_now:
-            next_active.add("architect")
-        if "architect" in finished_now:
-            next_active.add("developer")
-        if "developer" in finished_now:
-            # Developer fans out to security AND qa in parallel.
-            next_active.update({"security", "qa"})
-        if "security" in finished_now or "qa" in finished_now:
-            # Wait until both finish before predicting dockerize. If only one
-            # is done, keep the other one active.
-            completed_so_far = completed_agents_from_logs(logs)
-            if "security" not in completed_so_far:
-                next_active.add("security")
-            if "qa" not in completed_so_far:
-                next_active.add("qa")
-            if "security" in completed_so_far and "qa" in completed_so_far:
-                next_active.add("dockerize")
-
-        # Read run status from whichever node we saw last (best effort).
-        run_status = "running"
-        for node in nodes_in_event:
-            ns = event.get(node)
-            if isinstance(ns, dict) and ns.get("status"):
-                run_status = ns["status"]
-
-        done_set = completed_agents_from_logs(logs)
-        # Don't show "active" for nodes already complete.
-        next_active -= done_set
+        done_set     = completed_agents_from_logs(logs)
+        active_set   = predict_active(finished_now, done_set)
+        waiting_msg  = waiting_label(active_set)
 
         timeline_box.markdown(
-            render_timeline(next_active, run_status, done_set),
+            render_timeline(active_set, "running", done_set),
             unsafe_allow_html=True,
         )
-        log_box.markdown(render_log(logs), unsafe_allow_html=True)
+        show_progressive_section(artifacts_box, accumulated_state)
+        log_box.markdown(render_log(logs, waiting_message=waiting_msg), unsafe_allow_html=True)
 
     snapshot = graph.get_state(config)
     final    = snapshot.values
@@ -564,13 +667,17 @@ if status == "success" and result:
         unsafe_allow_html=True,
     )
 
-    show_timeline(set(), status, result.get("agent_logs", []))
+    st.markdown('<div class="section-label">Pipeline</div>', unsafe_allow_html=True)
+    st.markdown(
+        render_timeline(set(), status, completed_agents_from_logs(result.get("agent_logs", []))),
+        unsafe_allow_html=True,
+    )
 
-    if result.get("architecture_plan"):
-        st.markdown('<div class="section-label">Plan</div>', unsafe_allow_html=True)
-        st.markdown(render_plan_card(result["architecture_plan"]), unsafe_allow_html=True)
+    # Reuse progressive layout for consistency
+    final_container = st.empty()
+    show_progressive_section(final_container, result)
 
-    st.markdown('<div class="section-label">Output</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">Download</div>', unsafe_allow_html=True)
     zip_buf = create_zip(result)
     st.download_button(
         label="Download project zip",
@@ -578,12 +685,6 @@ if status == "success" and result:
         file_name="generated_api.zip",
         mime="application/zip",
     )
-
-    tabs = st.tabs(["main.py", "models.py", "Dockerfile", "tests"])
-    with tabs[0]: st.code(result.get("main_py", ""), language="python")
-    with tabs[1]: st.code(result.get("models_py", ""), language="python")
-    with tabs[2]: st.code(result.get("dockerfile", ""), language="dockerfile")
-    with tabs[3]: st.code(result.get("test_cases", "# no tests stored"), language="python")
 
     with st.expander("Agent activity log"):
         st.markdown(render_log(result.get("agent_logs", [])), unsafe_allow_html=True)
@@ -595,7 +696,8 @@ elif status == "rejected" and result:
         f'<div class="banner banner-fail">Input rejected: {reasons[-1]}</div>',
         unsafe_allow_html=True,
     )
-    show_logs(result.get("agent_logs", []))
+    st.markdown('<div class="section-label">Agent activity</div>', unsafe_allow_html=True)
+    st.markdown(render_log(result.get("agent_logs", [])), unsafe_allow_html=True)
 
 # ── Human review needed ──────────────────────────────────────────────────────
 elif status == "needs_human" and result:
@@ -618,11 +720,14 @@ elif status == "needs_human" and result:
         unsafe_allow_html=True,
     )
 
-    show_timeline(set(), status, result.get("agent_logs", []))
+    st.markdown('<div class="section-label">Pipeline</div>', unsafe_allow_html=True)
+    st.markdown(
+        render_timeline(set(), status, completed_agents_from_logs(result.get("agent_logs", []))),
+        unsafe_allow_html=True,
+    )
 
-    if result.get("architecture_plan"):
-        st.markdown('<div class="section-label">Plan</div>', unsafe_allow_html=True)
-        st.markdown(render_plan_card(result["architecture_plan"]), unsafe_allow_html=True)
+    final_container = st.empty()
+    show_progressive_section(final_container, result)
 
     st.markdown('<div class="section-label">Your call</div>', unsafe_allow_html=True)
     new_req = st.text_area(
@@ -636,20 +741,9 @@ elif status == "needs_human" and result:
     retry_clicked  = c1.button("Retry with clarification", use_container_width=True, key=f"hitl_retry_{attempt}")
     accept_clicked = c2.button("Accept what we have",      use_container_width=True, key=f"hitl_accept_{attempt}")
 
-    st.markdown('<div class="section-label">What failed</div>', unsafe_allow_html=True)
-    col_left, col_right = st.columns(2)
-    with col_left:
-        if sec_bad:
-            st.markdown("**Security findings**")
-            st.code(result.get("security_feedback") or "(no detail)", language="text")
-        if qa_bad:
-            st.markdown("**QA output**")
-            st.code(result.get("qa_output") or "(no detail)", language="text")
-        if not sec_bad and not qa_bad:
-            st.markdown("*(no verifier-level detail available)*")
-    with col_right:
-        st.markdown("**Last generated main.py**")
-        st.code(result.get("main_py", "") or "(empty)", language="python")
+    if qa_bad:
+        st.markdown('<div class="section-label">QA output</div>', unsafe_allow_html=True)
+        st.code(result.get("qa_output") or "(no detail)", language="text")
 
     if retry_clicked:
         clarified = new_req.strip() or result.get("user_requirements", "")
@@ -666,43 +760,33 @@ elif status == "needs_human" and result:
         st.session_state.pending_kind  = "resume"
         st.rerun()
 
-# ── Accepted partial output ─────────────────────────────────────────────────
+# ── Accepted partial ────────────────────────────────────────────────────────
 elif status == "accepted_partial" and result:
     st.markdown(
         '<div class="banner banner-warn">Accepted partial output. The code did not pass all verifiers — review before using.</div>',
         unsafe_allow_html=True,
     )
 
-    show_timeline(set(), status, result.get("agent_logs", []))
+    st.markdown('<div class="section-label">Pipeline</div>', unsafe_allow_html=True)
+    st.markdown(
+        render_timeline(set(), status, completed_agents_from_logs(result.get("agent_logs", []))),
+        unsafe_allow_html=True,
+    )
 
-    if result.get("architecture_plan"):
-        st.markdown('<div class="section-label">Plan</div>', unsafe_allow_html=True)
-        st.markdown(render_plan_card(result["architecture_plan"]), unsafe_allow_html=True)
+    final_container = st.empty()
+    show_progressive_section(final_container, result)
 
     if result.get("main_py") and result.get("models_py"):
-        if not result.get("dockerfile"):
-            result["dockerfile"] = ""
-        if not result.get("test_cases"):
-            result["test_cases"] = "# tests were not finalized"
+        if not result.get("dockerfile"):  result["dockerfile"]  = ""
+        if not result.get("test_cases"):  result["test_cases"]  = "# tests were not finalized"
         zip_buf = create_zip(result)
+        st.markdown('<div class="section-label">Download</div>', unsafe_allow_html=True)
         st.download_button(
             label="Download partial project zip",
             data=zip_buf,
             file_name="generated_api_partial.zip",
             mime="application/zip",
         )
-
-    tabs = st.tabs(["main.py", "models.py", "tests", "What failed"])
-    with tabs[0]: st.code(result.get("main_py", "") or "(empty)", language="python")
-    with tabs[1]: st.code(result.get("models_py", "") or "(empty)", language="python")
-    with tabs[2]: st.code(result.get("test_cases", "") or "# no tests stored", language="python")
-    with tabs[3]:
-        if security_failed(result):
-            st.markdown("**Security findings**")
-            st.code(result.get("security_feedback") or "(no detail)", language="text")
-        if qa_failed(result):
-            st.markdown("**QA output**")
-            st.code(result.get("qa_output") or "(no detail)", language="text")
 
     with st.expander("Agent activity log"):
         st.markdown(render_log(result.get("agent_logs", [])), unsafe_allow_html=True)
@@ -712,9 +796,7 @@ elif status == "failed":
     msg = "Generation failed."
     if result and result.get("error_messages"):
         msg = result["error_messages"][-1]
-    st.markdown(
-        f'<div class="banner banner-fail">{msg}</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown(f'<div class="banner banner-fail">{msg}</div>', unsafe_allow_html=True)
     if result:
-        show_logs(result.get("agent_logs", []))
+        st.markdown('<div class="section-label">Agent activity</div>', unsafe_allow_html=True)
+        st.markdown(render_log(result.get("agent_logs", [])), unsafe_allow_html=True)
