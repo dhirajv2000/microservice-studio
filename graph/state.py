@@ -58,7 +58,7 @@ def initial_state(user_requirements: str) -> AgentState:
         dockerfile=None,
 
         retries=0,
-        max_retries=1,
+        max_retries=2,
         human_review_count=0,
 
         current_agent="",

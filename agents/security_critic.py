@@ -122,8 +122,12 @@ security_agent = create_agent(
 
 
 def security_critic_node(state: dict) -> dict:
-    log = "[Security] Reviewing code..."
-    print(log)
+    start_log    = "[Security] Reviewing generated code..."
+    syntax_log   = "[Security] Parsing AST for syntax check..."
+    bandit_log   = "[Security] Scanning with bandit (B102, B307, B602, B605)..."
+    print(start_log)
+    print(syntax_log)
+    print(bandit_log)
 
     user_message = f"""Review these two files for security issues.
 
@@ -149,12 +153,12 @@ def security_critic_node(state: dict) -> dict:
         return {
             "security_approved": False,
             "security_feedback": f"Security critic could not complete: {e}",
-            "agent_logs": [log, error_msg],
+            "agent_logs": [start_log, syntax_log, bandit_log, error_msg],
             "error_messages": [error_msg],
         }
 
     if approved:
-        result_log = "[Security] Approved."
+        result_log = "[Security]Approved — no critical findings."
         feedback = None
     else:
         result_log = f"[Security] {len(issues)} issue(s) found."
@@ -164,5 +168,5 @@ def security_critic_node(state: dict) -> dict:
     return {
         "security_approved": approved,
         "security_feedback": feedback,
-        "agent_logs": [log, result_log],
+        "agent_logs": [start_log, syntax_log, bandit_log, result_log],
     }

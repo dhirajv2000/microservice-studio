@@ -110,12 +110,13 @@ qa_agent_runtime = create_agent(
 )
 
 
-# ── Node ──────────────────────────────────────────────────────────────────────
-
 def qa_node(state: dict) -> dict:
-    log = "[QA] Generating and running tests..."
-    print(log)
-
+    start_log     = "[QA] Generating pytest test cases..."
+    sandbox_log   = "[QA] Spinning up sandbox and installing dependencies..."
+    run_log       = "[QA] Running pytest against generated app..."
+    print(start_log)
+    print(sandbox_log)
+    print(run_log)
     global _current_models_py, _current_main_py
     _current_models_py = state["models_py"]
     _current_main_py = state["main_py"]
@@ -144,17 +145,19 @@ Write tests covering every endpoint, then call run_tests to verify them."""
             "qa_results": "fail",
             "qa_output": f"QA agent could not complete: {e}",
             "test_cases": "",
-            "agent_logs": [log, error_msg],
+            "agent_logs": [start_log, sandbox_log, run_log, error_msg],
             "error_messages": [error_msg],
         }
-
-    result_log = f"[QA] {'Passed' if passed else 'Failed'} {summary}"
+    if passed:
+        result_log = f"[QA] ✅ All tests passed — {summary}"
+    else:
+        result_log = f"[QA] ❌ Tests failed — {summary}"
     print(result_log)
 
     return {
         "qa_results": "pass" if passed else "fail",
         "qa_output": summary,
         "test_cases": test_code,
-        "agent_logs": [log, result_log],
+        "agent_logs": [start_log, sandbox_log, run_log, result_log],
         "error_messages": [summary] if not passed else [],
     }
