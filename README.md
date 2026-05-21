@@ -214,6 +214,18 @@ and the HITL flow.
 
 ---
 
+## See it in action
+
+**The agents collaborating in real time.** Each agent's status chip flips from `○ pending` to `✓ done` as it completes, with structured logs streaming below and artifacts (the architecture plan, generated code, Dockerfile) populating tabs as they're produced.
+
+![Agents working through the pipeline](docs/Product.png)
+
+**The generated FastAPI service.** The output is a fully-functional API with auto-generated OpenAPI docs — try every endpoint directly from the Swagger UI.
+
+![Swagger docs for the generated service](docs/Swagger.png)
+
+---
+
 ## Design notes
 
 - **Where LLMs are used:** Architect (reasoning), Developer (code synthesis),
