@@ -759,7 +759,7 @@ if status == "success" and result:
     st.download_button(
         label="Download project zip",
         data=zip_buf,
-        file_name="generated_api.zip",
+        file_name="service.zip",
         mime="application/zip",
     )
 
@@ -865,7 +865,7 @@ elif status == "accepted_partial" and result:
         st.download_button(
             label="Download partial project zip",
             data=zip_buf,
-            file_name="generated_api_partial.zip",
+            file_name="service_partial.zip",
             mime="application/zip",
         )
 
